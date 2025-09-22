@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# setphp - Switch PHP version by replacing C:\php with the requested version
+# Usage:
+#   setphp <version>   # e.g. setphp 83 or setphp 8.3
+#   setphp list        # show installed versions and the active one
+#   setphp             # same as 'setphp list'
+#
+#
+### Setup Instructions
+# - Save this script as setphp (no extension) somewhere, e.g. C:\scripts\setphp.
+# - Make it executable:
+#     chmod +x /c/scripts/setphp
+# -Add that directory to your Bash $PATH. For example, edit ~/.bashrc or ~/.bash_profile and add:
+#     export PATH=$PATH:/c/scripts
+# - Then reload:
+#     source ~/.bashrc
+#
+# Now you can run:
+#     setphp 83
+#     setphp 8.1
+
+root="/c"
+php_root="$root/php"
+
+# Detect current active version (symlink/folder contents name)
+get_active_version() {
+  if [ -d "$php_root" ]; then
+    # Grab the PHP binary version string
+    if command -v php >/dev/null 2>&1; then
+      php -v | head -n 1 | awk '{print $2}' | cut -d. -f1,2
+    else
+      echo "unknown"
+    fi
+  else
+    echo ""
+  fi
+}
+
+show_list() {
+  active=""
+  if command -v php >/dev/null 2>&1; then
+    active=$(php -v | head -n 1 | awk '{print $2}' | cut -d. -f1,2)
+  fi
+
+  echo "Installed PHP versions:"
+  for dir in "$root"/php*; do
+    [ -d "$dir" ] || continue
+    base=$(basename "$dir")
+
+    # Skip the plain php folder — that's just the active alias
+    if [ "$base" = "php" ]; then
+      continue
+    fi
+
+    # Format version for comparison
+    version_num="${base#php}"
+    version_fmt="${version_num:0:1}.${version_num:1}"
+
+    if [ "$version_fmt" = "$active" ]; then
+      echo " → $base   (active)"
+    else
+      echo "   $base"
+    fi
+  done
+  echo
+  if [ -n "$active" ]; then
+    echo "Current PHP version (php -v):"
+    php -v | head -n 1
+  else
+    echo "php command not found in PATH"
+  fi
+}
+
+# Default action = show list
+if [ -z "$1" ] || [ "$1" = "list" ]; then
+  show_list
+  exit 0
+fi
+
+# Normalize version argument (remove dot if present)
+version="$1"
+version="${version/./}"   # e.g. "8.3" -> "83"
+phpdir="php$version"
+php_version_dir="$root/$phpdir"
+
+# Check if target PHP version exists
+if [ ! -d "$php_version_dir" ]; then
+  echo "Error: $php_version_dir does not exist!"
+  exit 1
+fi
+
+# Remove current php folder if it exists
+if [ -d "$php_root" ]; then
+  echo "Removing existing $php_root..."
+  rm -rf "$php_root"
+fi
+
+# Copy requested version
+echo "Copying $php_version_dir to $php_root..."
+cp -r "$php_version_dir" "$php_root"
+
+echo "PHP has been switched to: $phpdir"
+echo
+show_list
